@@ -36,8 +36,13 @@ end
 ---@return string[] returns labels to skip or `nil` when all labels should be skipped
 function M:skip(win, labels)
 	local prefix = self.state.pattern.pattern
+	local skip_limit = 15 -- 只考虑每窗口最近的 N 个匹配，避免过度过滤标签池
+	local count = 0
 	for _, match in ipairs(self.state.results) do
 		if match.win == win then
+			if count >= skip_limit then
+				break
+			end
 			local buf = vim.api.nvim_win_get_buf(match.win)
 			local start_line, end_line = match.pos[1], match.end_pos[1]
 			if start_line ~= end_line then
@@ -49,6 +54,8 @@ function M:skip(win, labels)
 			if #lines == 0 then
 				goto continue
 			end
+
+			count = count + 1
 
 			local pys = pinyin.pinyin(string.sub(lines[1], start_col, end_col + 4), "")
 			local prefix_len = string.len(prefix)
