@@ -14,17 +14,39 @@ end
 function M:update()
 	self:reset()
 
+	-- pattern 变化时重置批次偏移，保证新搜索从第一批开始
+	if self.state._zh_last_pattern ~= self.state.pattern.pattern then
+		self.state._zh_last_pattern = self.state.pattern.pattern
+		self.state._zh_batch = 0
+	end
+
 	if #self.state.pattern() < self.state.opts.label.min_pattern_length then
 		return
 	end
 
 	local matches = self:filter()
 
-	for _, match in ipairs(matches) do
+	-- 按标签池容量分批：每批大小 ≈ 当前可用标签数，Tab 切换到下一批（leap 风格）
+	local batch = self.state._zh_batch or 0
+	local label_capacity = math.max(1, #self.labels)
+	local start_idx = batch * label_capacity + 1
+	if start_idx > #matches then
+		-- 超出总匹配数则自动回卷到第一批
+		batch = 0
+		self.state._zh_batch = 0
+		start_idx = 1
+	end
+	local end_idx = math.min(start_idx + label_capacity - 1, #matches)
+	local batched = {}
+	for i = start_idx, end_idx do
+		batched[#batched + 1] = matches[i]
+	end
+
+	for _, match in ipairs(batched) do
 		self:label(match, true)
 	end
 
-	for _, match in ipairs(matches) do
+	for _, match in ipairs(batched) do
 		if not self:label(match) then
 			break
 		end
